@@ -1,16 +1,16 @@
 module.exports = function () {
-  return {
-    files: [
-      'lib/**/*.js'
-    ],
+    return {
+        files: [
+            'src/**/*.js'
+        ],
 
-    tests: [
-      'test/**/*.spec.js'
-    ],
-
-    env: {
-      type: 'node',
-      runner: 'node'
-    }
-  };
+        tests: [
+            'test/**/*.spec.js'
+        ],
+        testFramework: 'mocha',
+        env: {
+            type: 'node',
+            runner: 'node'
+        }
+    };
 };
