@@ -1,12 +1,25 @@
 const redis = require('redis');
-const client = redis.createClient({
-    host: '127.0.0.1',
-    port: 6379
-});
+const winston = require('winston');
+const parseArgs = require('minimist');
 const config = require('./config');
+
+const args = parseArgs(process.argv.slice(2));
+
+const client = redis.createClient({
+    host: config.host,
+    port: config.port
+});
+
 const Repository = require('./repository.js');
 
-const repo = new Repository(client, config.mutexTimeout);
+const logger = new (winston.Logger)({
+    level: args.logLevel || config.logLevel,
+    transports: [
+        new (winston.transports.Console)(),
+        new (winston.transports.File)({ filename: new Date().getTime() + '.log' })
+    ]
+});
+const repo = new Repository(client, logger, config.mutexTimeout);
 
 function getMessage() {
     this.cnt = this.cnt || 0;
@@ -35,12 +48,12 @@ function eventHandler(msg, callback) {
 function detectRole() {
     repo.lock().then(lock => {
         generator();
-        console.log('generator');
+        logger.log('generator');
         extendLock(lock);
     }, err => {
         if (err instanceof repo.MutexError) {
             consumer();
-            console.log('consumer');
+            logger.log('consumer');
         }
     });
 }
@@ -52,16 +65,18 @@ function extendLock(lock) {
 
 function generator() {
     const message = getMessage();
-    console.log('generated: ', message);
+    logger.debug('generated: ', message);
     repo.publishMessage(message)
         .then(() => timeout(config.generationTimeout))
         .then(generator);
 }
 
 function handleConsumingResult (error, msg) {
-    console.log('consumed: ', msg, error);
     if (error) {
+        logger.error('consumed: ', msg, error);
         repo.publishErrorMessage(msg);
+    } else {
+        logger.debug('consumed: ', msg, error);
     }
     consumer();
 }
@@ -78,5 +93,24 @@ function consumer() {
     });
 }
 
-detectRole();
+function consumeErrors() {
+    repo.fetchAllErrorMessages().then(msgs => {
+        if (msgs && msgs.length) {
+            msgs.forEach((msg)=> console.log(msg));
+            console.log(`There were ${msgs.length} error messages`);
+        } else {
+            console.log('There are no error messages.');
+        }
+        repo.clearErrorMessages().then(() => {
+            console.log('Error message queue cleared');
+        });
+    });
+}
+
+if (args.getErrors) {
+    consumeErrors();
+} else {
+    detectRole();
+}
+
 

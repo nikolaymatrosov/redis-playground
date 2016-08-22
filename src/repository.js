@@ -35,8 +35,9 @@ class Lock {
 
 
 class Repository {
-    constructor(client, ttl) {
+    constructor(client, logger, ttl) {
         this.client = client;
+        this.logger = logger;
         this.ttl = ttl;
         this.value = Repository.randomValue();
         this.driftFactor = 0.01;
@@ -59,6 +60,7 @@ class Repository {
         return new Promise((resolve, reject) => {
             this.client.get(config.publisherMutex, (err, currentValue)=> {
                 if (err) {
+                    this.logger.error(err);
                     reject(err);
                 } else {
                     resolve(currentValue);
@@ -92,6 +94,7 @@ class Repository {
                 const start = Date.now();
 
                 if (err) {
+                    this.logger.error(err);
                     reject(err);
                 }
 
@@ -114,6 +117,7 @@ class Repository {
         return new Promise((resolve, reject) => {
             function checkResult (err) {
                 if (err) {
+                    this.logger.error(err);
                     reject(err);
                 }
                 return resolve();
@@ -136,6 +140,7 @@ class Repository {
         return new Promise((resolve, reject) => {
             this.client.lpush(channel, msg, (err) => {
                 if (err) {
+                    this.logger.error(err);
                     reject(err);
                 } else {
                     resolve();
@@ -148,6 +153,7 @@ class Repository {
         return new Promise((resolve, reject) => {
             this.client.rpop(config.generatedMessages, (err, msg) => {
                 if (err) {
+                    this.logger.error(err);
                     reject(err);
                 } else {
                     resolve(msg);
@@ -160,9 +166,23 @@ class Repository {
         return new Promise((resolve, reject) => {
             this.client.lrange(config.corruptMessages, 0, -1, (err, msgs) => {
                 if (err) {
+                    this.logger.error(err);
                     reject(err);
                 } else {
                     resolve(msgs);
+                }
+            });
+        });
+    }
+
+    clearErrorMessages() {
+        return new Promise((resolve, reject) => {
+            this.client.del(config.corruptMessages, (err) => {
+                if (err) {
+                    this.logger.error(err);
+                    reject(err);
+                } else {
+                    resolve();
                 }
             });
         });
